@@ -1,0 +1,29 @@
+[package]
+name = "tpt-diskview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A fast, modern disk space analyzer"
+
+[lib]
+name = "tpt_diskview_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "tpt-diskview"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+tpt-diskview-core = { path = "../crates/core" }
+tpt-diskview-cleanup = { path = "../crates/cleanup" }
+tauri.workspace = true
+tauri-plugin-shell = "2"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+log.workspace = true
+env_logger.workspace = true
+trash = "3"

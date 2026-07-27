@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/core", "crates/cleanup", "gen_icon_temp"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tpt-solutions/tpt-diskview"
+authors = ["tpt-solutions"]
+
+[workspace.dependencies]
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+walkdir = "2"
+ignore = "0.4"
+rayon = "1"
+blake3 = "1"
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

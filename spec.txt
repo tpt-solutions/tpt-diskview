@@ -1,0 +1,8 @@
+Disk Space Analyzer (TreeSize / WinDirStat Alternative)
+Concept: tpt-diskview – A blazing-fast, visual disk space analyzer.
+Tech Stack: Rust (for rapid filesystem traversal using ignore or walkdir crates) + TypeScript/Tauri (for a modern, responsive UI).
+Why it’s better: TreeSize and WinDirStat are either moving to subscription-only or have dated UIs. A Rust-based alternative can scan terabytes of data in seconds, uses negligible RAM, has zero telemetry, and will remain perpetually free and open-source. Add a "smart cleanup" feature that safely identifies temporary files, duplicate files, or old Docker volumes.
+
+Compatible on Windows, Linux and Archon. https://github.com/tpt-solutions/tpt-archon
+
+Linux & Archon Compatibility: Runs natively on Linux via POSIX APIs. On Archon, it bypasses traditional VFS overhead entirely by leveraging tpt-archon-core’s zero-allocation block device access and tpt-archon-bridge for zero-copy directory traversal, making multi-terabyte scans near-instantaneous.

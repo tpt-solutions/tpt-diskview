@@ -1,0 +1,19 @@
+[package]
+name = "tpt-diskview-cleanup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Smart cleanup detection (temp files, duplicates, Docker volumes)"
+
+[dependencies]
+tpt-diskview-core = { path = "../core" }
+blake3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+walkdir.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
