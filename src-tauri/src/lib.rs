@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 mod commands;
 
-use commands::{AppState, start_scan, cancel_scan, scan_status, get_scan_results, detect_cleanup_candidates};
+use commands::{AppState, start_scan, cancel_scan, scan_status, get_scan_results, detect_cleanup_candidates, cleanup_selected, dry_run_cleanup};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,6 +15,8 @@ pub fn run() {
             scan_status,
             get_scan_results,
             detect_cleanup_candidates,
+            cleanup_selected,
+            dry_run_cleanup,
         ])
         .setup(|_app| {
             Ok(())

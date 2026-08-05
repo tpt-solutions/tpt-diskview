@@ -22,6 +22,27 @@ pub fn detect_temp_files(root: &Path) -> Vec<CleanupCandidate> {
         }
     }
 
+    #[cfg(unix)]
+    {
+        let linux_temp_dirs = vec![
+            "/tmp",
+            "/var/tmp",
+            "/dev/shm",
+        ];
+        for dir in linux_temp_dirs {
+            let p = std::path::Path::new(dir);
+            if p.exists() && p.is_dir() {
+                collect_files(p, CleanupCategory::TempFiles, &mut candidates);
+            }
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            let cache_dir = std::path::PathBuf::from(home).join(".cache");
+            if cache_dir.exists() {
+                collect_files(&cache_dir, CleanupCategory::TempFiles, &mut candidates);
+            }
+        }
+    }
+
     candidates
 }
 

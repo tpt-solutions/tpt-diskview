@@ -124,7 +124,6 @@ pub fn detect_cleanup_candidates(
 }
 
 #[tauri::command]
-#[allow(dead_code)]
 pub fn cleanup_selected(paths: Vec<String>) -> Result<serde_json::Value, String> {
     let mut removed = 0;
     let mut freed = 0u64;
@@ -172,7 +171,39 @@ pub fn cleanup_selected(paths: Vec<String>) -> Result<serde_json::Value, String>
     Ok(serde_json::json!({ "removed": removed, "freed": freed }))
 }
 
-#[allow(dead_code)]
+#[tauri::command]
+pub fn dry_run_cleanup(paths: Vec<String>) -> Result<serde_json::Value, String> {
+    let mut items = Vec::new();
+    let mut total_freed = 0u64;
+
+    for path_str in paths {
+        let path = std::path::PathBuf::from(&path_str);
+        if !path.exists() {
+            continue;
+        }
+
+        let size = if path.is_file() {
+            std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
+        } else {
+            estimate_dir_size(&path)
+        };
+
+        total_freed += size;
+        items.push(serde_json::json!({
+            "path": path_str,
+            "size": size,
+            "will_delete": path.is_file() || path.is_dir()
+        }));
+    }
+
+    Ok(serde_json::json!({
+        "dry_run": true,
+        "total_items": items.len(),
+        "total_freed": total_freed,
+        "items": items
+    }))
+}
+
 fn estimate_dir_size(dir: &PathBuf) -> u64 {
     let mut total = 0u64;
     if let Ok(entries) = std::fs::read_dir(dir) {

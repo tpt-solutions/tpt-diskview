@@ -18,7 +18,26 @@ pub fn detect_stale_docker_volumes(root: &Path) -> Vec<CleanupCandidate> {
         let docker_paths = vec![
             root.join("var").join("lib").join("docker"),
             root.join(".docker"),
+            root.join(".docker").join("desktop"),
         ];
+
+        if let Some(home) = std::env::var_os("HOME") {
+            let docker_desktop = std::path::PathBuf::from(home).join(".docker").join("desktop");
+            if docker_desktop.exists() {
+                collect_docker_artifacts(&docker_desktop, &mut candidates);
+            }
+        }
+
+        let extra_linux_paths = vec![
+            "/var/lib/docker/desktop",
+            "/var/lib/docker/containers",
+        ];
+        for p in extra_linux_paths {
+            let path = std::path::Path::new(p);
+            if path.exists() {
+                collect_docker_artifacts(path, &mut candidates);
+            }
+        }
 
         for path in docker_paths {
             if path.exists() {

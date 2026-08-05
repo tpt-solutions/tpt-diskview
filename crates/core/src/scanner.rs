@@ -120,7 +120,7 @@ impl Scanner {
 
         let dir_entries: Vec<_> = entries
             .iter()
-            .filter(|e| e.path() != root && e.depth() == 1)
+            .filter(|e| e.path() != root && e.depth() == 1 && !is_skipped_mount_point(e.path()))
             .collect();
 
         let child_nodes: Vec<Result<FileNode, ScanError>> = dir_entries
@@ -221,6 +221,9 @@ impl Scanner {
 
             let path = entry.path();
             if path == dir {
+                continue;
+            }
+            if is_skipped_mount_point(path) {
                 continue;
             }
 
@@ -360,6 +363,21 @@ fn to_extended_length_path(path: &Path) -> PathBuf {
 #[cfg(not(windows))]
 fn to_extended_length_path(path: &Path) -> PathBuf {
     path.to_path_buf()
+}
+
+/// Check if a path is a Linux mount point that should be skipped
+#[cfg(unix)]
+fn is_skipped_mount_point(path: &Path) -> bool {
+    let skip_dirs = [
+        "/proc", "/sys", "/dev", "/run", "/snap",
+    ];
+    let path_str = path.to_string_lossy();
+    skip_dirs.iter().any(|d| path_str.starts_with(d))
+}
+
+#[cfg(not(unix))]
+fn is_skipped_mount_point(_path: &Path) -> bool {
+    false
 }
 
 /// Check if we have read permission for a path

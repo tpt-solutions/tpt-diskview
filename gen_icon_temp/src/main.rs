@@ -1,73 +1,139 @@
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 
-fn main() {
-    // Create a proper ICO file with BMP format (required by Windows RC.exe)
-    // ICO format:
-    // - 6 byte header
-    // - 16 byte directory entry per image
-    // - Image data (BMP format with AND mask)
-    
-    let width = 32u16;
-    let height = 32u16;
-    let bit_count = 32u16;
-    let planes = 1u16;
-    
-    // BMP header size
-    let bmp_header_size = 40u32;
-    // Image size (32 * 32 * 4 bytes per pixel)
-    let image_size = (width as u32) * (height as u32) * 4;
-    // AND mask size (32 * 32 / 8 = 128 bytes, padded to 4-byte boundary per row = 4 * 32 = 128)
-    let and_mask_size = ((width as u32 + 31) / 32) * 4 * (height as u32);
-    let total_image_size = image_size + and_mask_size;
-    
-    // Directory entry offset (6 byte header + 16 byte directory entry = 22)
-    let image_offset = 22u32;
-    
-    let file = File::create("../src-tauri/icons/icon.ico").unwrap();
-    let mut writer = BufWriter::new(file);
-    
-    // ICO Header (6 bytes)
-    writer.write_all(&[0x00, 0x00]).unwrap(); // Reserved (0)
-    writer.write_all(&[0x01, 0x00]).unwrap(); // Type (1 = ICO)
-    writer.write_all(&[0x01, 0x00]).unwrap(); // Count (1 image)
-    
-    // Directory Entry (16 bytes)
-    writer.write_all(&[width as u8]).unwrap();        // Width (32)
-    writer.write_all(&[height as u8]).unwrap();       // Height (32)
-    writer.write_all(&[0x00]).unwrap();               // Color count (0 = no palette)
-    writer.write_all(&[0x00]).unwrap();               // Reserved
-    writer.write_all(&planes.to_le_bytes()).unwrap(); // Planes
-    writer.write_all(&bit_count.to_le_bytes()).unwrap(); // Bit count
-    writer.write_all(&total_image_size.to_le_bytes()).unwrap(); // Size of image data
-    writer.write_all(&image_offset.to_le_bytes()).unwrap();     // Offset of image data
-    
-    // BMP Header (BITMAPINFOHEADER - 40 bytes)
-    writer.write_all(&bmp_header_size.to_le_bytes()).unwrap();  // biSize
-    writer.write_all(&(width as i32).to_le_bytes()).unwrap();   // biWidth
-    writer.write_all(&((height * 2) as i32).to_le_bytes()).unwrap(); // biHeight (2x for ICO with AND mask)
-    writer.write_all(&planes.to_le_bytes()).unwrap();           // biPlanes
-    writer.write_all(&bit_count.to_le_bytes()).unwrap();        // biBitCount
-    writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();       // biCompression (BI_RGB = 0)
-    writer.write_all(&image_size.to_le_bytes()).unwrap();       // biSizeImage
-    writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();       // biXPelsPerMeter
-    writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();       // biYPelsPerMeter
-    writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();       // biClrUsed
-    writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();       // biClrImportant
-    
-    // XOR mask - 32x32 32-bit BGRA (top-down)
-    for _y in 0..height {
-        for _x in 0..width {
-            writer.write_all(&[0x16, 0x21, 0x3E, 0xFF]).unwrap(); // Blue color (BGRA)
+fn make_png_bytes(width: u32, height: u32) -> Vec<u8> {
+    let mut png = Vec::new();
+
+    png.extend_from_slice(&[137, 80, 78, 71, 13, 10, 26, 10]);
+
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.push(8);
+    ihdr.push(6);
+    ihdr.push(0);
+    ihdr.push(0);
+    ihdr.push(0);
+    write_chunk(&mut png, b"IHDR", &ihdr);
+
+    let row_size = 1 + width as usize * 4;
+    let raw_size = row_size * height as usize;
+    let mut raw_data = vec![0u8; raw_size];
+
+    for y in 0..height as usize {
+        raw_data[y * row_size] = 0;
+        for x in 0..width as usize {
+            let px = y * row_size + 1 + x * 4;
+            raw_data[px + 0] = 0x60;
+            raw_data[px + 1] = 0x34;
+            raw_data[px + 2] = 0x0F;
+            raw_data[px + 3] = 0xFF;
         }
     }
-    
-    // AND mask - 32x32 1-bit (4 bytes per row, 32 rows = 128 bytes)
-    // All zeros = fully opaque
-    for _y in 0..height {
-        writer.write_all(&[0x00, 0x00, 0x00, 0x00]).unwrap();
+
+    let mut deflated = Vec::new();
+    let mut remaining = &raw_data[..];
+    loop {
+        let block_size = remaining.len().min(65535);
+        let is_final = block_size == remaining.len();
+        deflated.push(if is_final { 0x01 } else { 0x00 });
+        let len = block_size as u16;
+        deflated.extend_from_slice(&len.to_le_bytes());
+        deflated.extend_from_slice(&(!len).to_le_bytes());
+        deflated.extend_from_slice(&remaining[..block_size]);
+        remaining = &remaining[block_size..];
+        if remaining.is_empty() {
+            break;
+        }
     }
-    
-    writer.flush().unwrap();
-    println!("ICO file created successfully in BMP format!");
+    let adler = adler32(&raw_data);
+    deflated.extend_from_slice(&adler.to_be_bytes());
+    write_chunk(&mut png, b"IDAT", &deflated);
+    write_chunk(&mut png, b"IEND", &[]);
+
+    png
+}
+
+fn write_chunk(data: &mut Vec<u8>, chunk_type: &[u8; 4], chunk_data: &[u8]) {
+    let length = chunk_data.len() as u32;
+    data.extend_from_slice(&length.to_be_bytes());
+    let mut crc_input = Vec::with_capacity(4 + chunk_data.len());
+    crc_input.extend_from_slice(chunk_type);
+    crc_input.extend_from_slice(chunk_data);
+    let crc = crc32(&crc_input);
+    data.extend_from_slice(chunk_type);
+    data.extend_from_slice(chunk_data);
+    data.extend_from_slice(&crc.to_be_bytes());
+}
+
+fn adler32(data: &[u8]) -> u32 {
+    let mut a = 1u32;
+    let mut b = 0u32;
+    for &byte in data {
+        a = (a + byte as u32) % 65521;
+        b = (b + a) % 65521;
+    }
+    (b << 16) | a
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFFFFFFu32;
+    for &byte in data {
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    crc ^ 0xFFFFFFFF
+}
+
+fn make_rgba_data(width: u32, height: u32) -> Vec<u8> {
+    let mut data = Vec::with_capacity((width * height * 4) as usize);
+    for _ in 0..height {
+        for _ in 0..width {
+            data.extend_from_slice(&[0x0F, 0x34, 0x60, 0xFF]);
+        }
+    }
+    data
+}
+
+fn main() {
+    let sizes = [32u32, 64, 128, 256];
+
+    let mut icon_dir = ico::IconDir::new(ico::ResourceType::Icon);
+    for &size in &sizes {
+        let rgba = make_rgba_data(size, size);
+        let img = ico::IconImage::from_rgba_data(size, size, rgba);
+        icon_dir.add_entry(ico::IconDirEntry::encode_as_png(&img).unwrap());
+    }
+
+    let out_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../src-tauri/icons");
+    std::fs::create_dir_all(out_dir).unwrap();
+
+    let file = File::create(format!("{}/icon.ico", out_dir)).unwrap();
+    icon_dir.write(file).unwrap();
+    println!("Created icon.ico with {} sizes", sizes.len());
+
+    for &size in &[32, 128, 256] {
+        let png_data = make_png_bytes(size, size);
+        let name = if size == 256 {
+            "icon-256.png"
+        } else {
+            &format!("{}x{}.png", size, size)
+        };
+        let mut file = File::create(format!("{}/{}", out_dir, name)).unwrap();
+        file.write_all(&png_data).unwrap();
+        println!("Created {}", name);
+    }
+
+    let png_data = make_png_bytes(256, 256);
+    let mut file = File::create(format!("{}/128x128@2x.png", out_dir)).unwrap();
+    file.write_all(&png_data).unwrap();
+    println!("Created 128x128@2x.png");
+
+    println!("All icons generated successfully!");
 }
